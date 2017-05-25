@@ -19,6 +19,7 @@
 #include <Adafruit_Sensor.h>
 #include <DHT.h>
 #include <DHT_U.h>
+#include <Cmd.h>
 
 #define DHTPIN            2         // Pin which is connected to the DHT sensor.
 #define DHTTYPE           DHT22     // DHT 22 (AM2302)
@@ -30,6 +31,7 @@ DHT_Unified dht(DHTPIN, DHTTYPE);
 #define DEGREE '\xb0'
 float fCurrentTemp = 99.9f;
 float fCurrentHumidity = 99.9f;
+unsigned long lastSensorPoll;
 
 
 U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* clock=*/ A5, /* data=*/ A4, /* reset=*/ U8X8_PIN_NONE);   // All Boards without Reset of the Display
@@ -37,9 +39,13 @@ U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* clock=*/ A5, /* data=*/ A4,
 
 void setup(void) {
   u8g2.begin();
-  Serial.begin(SERIAL_BAUDRATE);
   dht.begin();
+  lastSensorPoll = millis();
   updateDisplay();
+
+  Serial.begin(SERIAL_BAUDRATE);
+  cmdInit(&Serial);
+  cmdAdd("rs", readSensor);
 }
 
 void updateSensors()
@@ -81,9 +87,22 @@ void updateDisplay()
 
 void loop(void)
 {
-  int in = Serial.read();
-  updateSensors();
-  updateDisplay();
-  delay(1000);
+  unsigned long currentTime = millis();
+
+  if ((currentTime - lastSensorPoll) > 1000)
+  {
+    updateSensors();
+    updateDisplay();
+  }
+  cmdPoll();
+}
+
+void readSensor(int argc, char **args)
+{
+  Stream *s = cmdGetStream();
+  s->print(String(fCurrentTemp, 1));
+  s->print("°C ");
+  s->print(String(fCurrentHumidity, 0));
+  s->println("%");
 }
 
