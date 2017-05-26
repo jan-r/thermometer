@@ -25,8 +25,16 @@ Required software libraries:
 
 Serial interface:
 -----------------
-The following commands can be given over the serial interface (57600 baud, 8N1):
+The following commands can be given over the serial interface (57600 baud, 8-N-1):
 
-rs   - read sensor
-       Reads the current temperature and relative humidity
+* rs [x]  read sensor
+          Print the current temperature and/or relative humidity. If no argument is given,
+          both values are printed. If argument "0" is given, only temperature is printed.
+          If "1" is given, only humidity is printed.
+
+* dm x    select display mode
+          Display modes are:
+          - 0: show current values
+          - 1: show bargraph
+          - 2: alternate between values and bargraph
 

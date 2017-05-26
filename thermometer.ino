@@ -26,7 +26,7 @@
 
 DHT_Unified dht(DHTPIN, DHTTYPE);
 
-#define SERIAL_BAUDRATE   19200
+#define SERIAL_BAUDRATE   57600
 
 #define DEGREE '\xb0'
 float fCurrentTemp = 99.9f;
@@ -35,19 +35,60 @@ unsigned long lastSensorPoll;
 
 
 U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* clock=*/ A5, /* data=*/ A4, /* reset=*/ U8X8_PIN_NONE);   // All Boards without Reset of the Display
+#define DISPLAY_RES_X   128
+#define DISPLAY_RES_Y   64
 
+// A type to hold a display coordinate (an X or Y value)
+#if (DISPLAY_RES_X <= 255) && (DISPLAY_RES_Y <= 255)
+typedef unsigned char COORD;
+#else
+typedef unsigned int  COORD;
+#endif
 
-void setup(void) {
+//#define WITH_TEST_COORDS
+
+char displayMode = 0;
+
+// ----------------------------------------------------------------------------
+// Initial setup
+// ----------------------------------------------------------------------------
+void setup(void)
+{
   u8g2.begin();
   dht.begin();
   lastSensorPoll = millis();
   updateDisplay();
 
+  // initialize serial command interface
   Serial.begin(SERIAL_BAUDRATE);
   cmdInit(&Serial);
   cmdAdd("rs", readSensor);
+  #ifdef WITH_TEST_COORDS
+  cmdAdd("tc", testCoords);
+  #endif
+  cmdAdd("dm", setDisplayMode);
 }
 
+// ----------------------------------------------------------------------------
+// The cyclic main loop
+// ----------------------------------------------------------------------------
+void loop(void)
+{
+  unsigned long currentTime = millis();
+
+  if ((currentTime - lastSensorPoll) > 2000)
+  {
+    lastSensorPoll = currentTime;
+    updateSensors();
+    updateDisplay();
+  }
+  cmdPoll();
+}
+
+// ----------------------------------------------------------------------------
+// Fetch the current sensor values and update the global variables
+// fCurrentTemp and fCurrentHumidity.
+// ----------------------------------------------------------------------------
 void updateSensors()
 {
   sensors_event_t event;
@@ -62,7 +103,45 @@ void updateSensors()
   }
 }
 
+// ----------------------------------------------------------------------------
+// Command to change the display mode
+// ----------------------------------------------------------------------------
+void setDisplayMode(int argc, char **args)
+{
+  if (argc != 2)
+  {
+    Stream *s = cmdGetStream();
+    s->println("*** dm: needs one argument (0: values, 1: bargraph, 2 auto)");
+  }
+  else
+  {
+    char val = cmdStr2Num(args[1], 10);
+    if ((val >= 0) && (val <= 2))
+    {
+      displayMode = val;
+    }
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Update the display
+// ----------------------------------------------------------------------------
 void updateDisplay()
+{
+  if (displayMode == 0)
+  {
+    displayValues();
+  }
+  else
+  {
+    displayBargraph();
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Show current measured values on the display
+// ----------------------------------------------------------------------------
+void displayValues()
 {
   u8g2.firstPage();
   do {
@@ -85,24 +164,162 @@ void updateDisplay()
   } while ( u8g2.nextPage() );
 }
 
-void loop(void)
+// ----------------------------------------------------------------------------
+// Display a bargraph with the temperature history
+// ----------------------------------------------------------------------------
+void displayBargraph()
 {
-  unsigned long currentTime = millis();
-
-  if ((currentTime - lastSensorPoll) > 1000)
+  u8g2.firstPage();
+  do
   {
-    updateSensors();
-    updateDisplay();
-  }
-  cmdPoll();
+    drawAxes();
+  } while ( u8g2.nextPage() );
 }
 
+// ----------------------------------------------------------------------------
+// Print the current sensor values on the serial interface
+// ----------------------------------------------------------------------------
 void readSensor(int argc, char **args)
 {
   Stream *s = cmdGetStream();
-  s->print(String(fCurrentTemp, 1));
-  s->print("°C ");
-  s->print(String(fCurrentHumidity, 0));
-  s->println("%");
+  bool printTemp = false;
+  bool printHumidity = false;
+
+  if (argc == 1)
+  {
+    printTemp = true;
+    printHumidity = true;
+  }
+  else if (argc == 2)
+  {
+    char value = cmdStr2Num(args[1], 10);
+    if (value == 0)
+    {
+      printTemp = true;
+    }
+    else if (value == 1)
+    {
+      printHumidity = true;
+    }
+    else
+    {
+      s->println("*** rs: 0: temp  1: humidity");
+      return;
+    }
+  }
+  else
+  {
+    s->println("*** rs: expecting 0 or 1 argument(s)");
+    return;
+  }
+
+  if (printTemp)
+  {
+    s->print(String(fCurrentTemp, 1));
+    s->println("°C");
+  }
+  if (printHumidity)
+  {
+    s->print(String(fCurrentHumidity, 0));
+    s->println("%");
+  }
+}
+
+// ------------ Bargraph display -------------------------
+float fMinY = 16.0f;
+float fMaxY = 30.0f;
+float fMinX = 0.0f;
+float fMaxX = 100.0f;
+COORD marginBotPx = 10;
+COORD marginTopPx = 1;
+COORD marginLeftPx = 15;
+COORD marginRightPx = 1;
+
+// ----------------------------------------------------------------------------
+/// Transform a floating point value to absolute display coordinates
+// ----------------------------------------------------------------------------
+bool pointToDisplayCoords(float fPointX, float fPointY, COORD& x, COORD& y)
+{
+  bool boOnScreen = false;
+  if (     (fPointX >= fMinX)
+        && (fPointX <= fMaxX)
+        && (fPointY >= fMinY)
+        && (fPointY <= fMaxY) )
+  {
+    boOnScreen = true;
+
+    // calculate absolute x coordinate
+    COORD pixels = DISPLAY_RES_X - (marginLeftPx + marginRightPx);
+    float fRelPoint = (fPointX - fMinX) / (fMaxX - fMinX);
+    x = marginLeftPx + (fRelPoint * pixels);
+
+    // calculate absolute y coordinate
+    pixels = DISPLAY_RES_Y - (marginTopPx + marginBotPx);
+    fRelPoint = ((fPointY - fMinY) / (fMaxY - fMinY));
+    y = DISPLAY_RES_Y - (marginBotPx + fRelPoint * pixels);
+  }
+
+  return boOnScreen;
+}
+
+#ifdef WITH_TEST_COORDS
+// ----------------------------------------------------------------------------
+// Test command to test the implementation of pointToDisplayCoords
+// ----------------------------------------------------------------------------
+void testCoords(int argc, char **args)
+{
+  Stream *s = cmdGetStream();
+  COORD x, y;
+  if (argc == 3)
+  {
+    float fX = (float)cmdStr2Num(args[1], 10) / 10.0f;
+    float fY = (float)cmdStr2Num(args[2], 10) / 10.0f;
+    if (pointToDisplayCoords(fX, fY, x, y))
+    {
+      s->println(x);
+      s->println(y);
+    }
+    else
+    {
+      s->println("off screen");
+    }
+  }
+  else
+  {
+    s->println("*** testCoords: invalid number of arguments (must be 2)");
+  }
+}
+#endif
+
+// ----------------------------------------------------------------------------
+// Draw the coordinate system axes and ticks
+// ----------------------------------------------------------------------------
+void drawAxes()
+{
+  char buf[8];
+  u8g2.setFont(u8g2_font_5x7_tf);
+
+  COORD minx, miny, maxx, maxy;
+  pointToDisplayCoords(fMinX, fMinY, minx, miny);
+  pointToDisplayCoords(fMaxX, fMaxY, maxx, maxy);
+  u8g2.drawLine(minx, miny, maxx, miny);
+  u8g2.drawLine(minx, miny, minx, maxy);
+
+  float fTick = floor(fMinY + 1.0f);
+  COORD x, y;
+  pointToDisplayCoords(fMinX, fTick, x, y);
+  u8g2.drawPixel(x-1, y);
+  u8g2.drawPixel(x-2, y);
+  String s = String(fTick, 0);
+  s.toCharArray(buf, sizeof(buf));
+  u8g2.drawStr(0, y+3, buf);
+
+  fTick = floor(fMaxY - 1.0f);
+  pointToDisplayCoords(fMinX, fTick, x, y);
+  u8g2.drawPixel(x-1, y);
+  u8g2.drawPixel(x-2, y);
+  s = String(fTick, 0);
+  s.toCharArray(buf, sizeof(buf));
+  u8g2.drawStr(0, y+3, buf);
 }
 
