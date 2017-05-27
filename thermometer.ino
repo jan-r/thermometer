@@ -79,7 +79,7 @@ void setup(void)
   cmdAdd("tc", testCoords);
   #endif
   cmdAdd("dm", setDisplayMode);
-  Serial.println("Ready.");
+  Serial.println("Rdy");
 }
 
 // ----------------------------------------------------------------------------
@@ -105,15 +105,51 @@ void loop(void)
 // ----------------------------------------------------------------------------
 void updateSensors(unsigned long currentTime)
 {
+  enum {POWERING_UP, MEASURING, SLEEPING};
+  static unsigned long lastStateChange = 0;
+  static char state = MEASURING;
   sensors_event_t event;
-  dht.temperature().getEvent(&event);
-  if (!isnan(event.temperature))
+
+  // sensor state machine:
+  // - power up the sensor for 1000 ms to stabilize
+  // - take a measurement
+  // - power down the sensor for 9000 ms
+  switch (state)
   {
-    fCurrentTemp = event.temperature;
-  }
-  dht.humidity().getEvent(&event);
-  if (!isnan(event.relative_humidity)) {
-    fCurrentHumidity = event.relative_humidity;
+    case MEASURING:
+      dht.temperature().getEvent(&event);
+      if (!isnan(event.temperature))
+      {
+        fCurrentTemp = event.temperature;
+      }
+      dht.humidity().getEvent(&event);
+      if (!isnan(event.relative_humidity)) {
+        fCurrentHumidity = event.relative_humidity;
+      }
+      // switch off the sensor
+      digitalWrite(DHTPOWERPIN, LOW);
+      state = SLEEPING;
+      lastStateChange = currentTime;
+      break;
+
+    case SLEEPING:
+      if ((currentTime - lastStateChange) >= 9000)
+      {
+        lastStateChange = currentTime;
+        state = POWERING_UP;
+      }
+      break;
+
+    case POWERING_UP:
+    default:
+      // enable sensor
+      digitalWrite(DHTPOWERPIN, HIGH);
+      if ((currentTime - lastStateChange) >= 1000)
+      {
+        lastStateChange = currentTime;
+        state = MEASURING;
+      }
+      break;
   }
 }
 
