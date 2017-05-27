@@ -22,6 +22,7 @@
 #include <Cmd.h>
 
 #define DHTPIN            2         // Pin which is connected to the DHT sensor.
+#define DHTPOWERPIN       3         // Pin which supplies the DHT sensor with power.
 #define DHTTYPE           DHT22     // DHT 22 (AM2302)
 
 DHT_Unified dht(DHTPIN, DHTTYPE);
@@ -31,7 +32,6 @@ DHT_Unified dht(DHTPIN, DHTTYPE);
 #define DEGREE '\xb0'
 float fCurrentTemp = 99.9f;
 float fCurrentHumidity = 99.9f;
-unsigned long lastSensorPoll;
 
 
 U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* clock=*/ A5, /* data=*/ A4, /* reset=*/ U8X8_PIN_NONE);   // All Boards without Reset of the Display
@@ -45,8 +45,10 @@ typedef unsigned char COORD;
 typedef unsigned int  COORD;
 #endif
 
+#define DISPLAY_ALTERNATING_SECONDS   5
 //#define WITH_TEST_COORDS
 
+// global display mode
 char displayMode = 0;
 
 // ----------------------------------------------------------------------------
@@ -54,10 +56,20 @@ char displayMode = 0;
 // ----------------------------------------------------------------------------
 void setup(void)
 {
+  // initialize the display and show a welcome message
   u8g2.begin();
+  u8g2.setFont(u8g2_font_fub20_tf);
+  u8g2.firstPage();
+  do
+  {
+    u8g2.drawStr(0,24,"Hi!");
+  } while ( u8g2.nextPage() );
+
+  // power up and initialize DHT22 sensor
+  pinMode(DHTPOWERPIN, OUTPUT);
+  digitalWrite(DHTPOWERPIN, HIGH);
+  delay(1000);
   dht.begin();
-  lastSensorPoll = millis();
-  updateDisplay();
 
   // initialize serial command interface
   Serial.begin(SERIAL_BAUDRATE);
@@ -67,6 +79,7 @@ void setup(void)
   cmdAdd("tc", testCoords);
   #endif
   cmdAdd("dm", setDisplayMode);
+  Serial.println("Ready.");
 }
 
 // ----------------------------------------------------------------------------
@@ -76,12 +89,13 @@ void loop(void)
 {
   unsigned long currentTime = millis();
 
-  if ((currentTime - lastSensorPoll) > 2000)
-  {
-    lastSensorPoll = currentTime;
-    updateSensors();
-    updateDisplay();
-  }
+  // handle the connected sensors
+  updateSensors(currentTime);
+
+  // handle the display
+  updateDisplay(currentTime);
+
+  // handle serial interface
   cmdPoll();
 }
 
@@ -89,7 +103,7 @@ void loop(void)
 // Fetch the current sensor values and update the global variables
 // fCurrentTemp and fCurrentHumidity.
 // ----------------------------------------------------------------------------
-void updateSensors()
+void updateSensors(unsigned long currentTime)
 {
   sensors_event_t event;
   dht.temperature().getEvent(&event);
@@ -126,15 +140,50 @@ void setDisplayMode(int argc, char **args)
 // ----------------------------------------------------------------------------
 // Update the display
 // ----------------------------------------------------------------------------
-void updateDisplay()
+void updateDisplay(unsigned long currentTime)
 {
-  if (displayMode == 0)
+  static unsigned long lastUpdate = 0UL;
+  static char currentDisplayMode = 0;
+  static char alternatingCounter = 0;
+
+  if ((currentTime - lastUpdate) >= 1000)
   {
-    displayValues();
-  }
-  else
-  {
-    displayBargraph();
+    // one second has passed, update the display
+
+    // determine the effective display mode depending on the globally selected display mode
+    if (displayMode == 2)
+    {
+      // alternating display
+      if (alternatingCounter <= 0)
+      {
+        // toggle display mode
+        currentDisplayMode ^= 1;
+        alternatingCounter = DISPLAY_ALTERNATING_SECONDS;
+      }
+      else
+      {
+        alternatingCounter--;
+      }
+    }
+    else
+    {
+      // in mode 0 and 1, just use the globally selected display mode
+      currentDisplayMode = displayMode;
+      alternatingCounter = 0;
+    }
+
+    // finally draw the display contents
+    if (currentDisplayMode == 0)
+    {
+      displayValues();
+    }
+    else
+    {
+      displayBargraph();
+    }
+
+    // update the one second timer
+    lastUpdate = currentTime;
   }
 }
 

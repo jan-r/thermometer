@@ -10,8 +10,15 @@ Components:
 Hardware setup:
 ---------------
 * Arduino D2:           DHT22 "data" pin
+* Arduino D3:           DHT22 "VCC" pin
 * Arduino A4 (I2C SDA): SDA pin of display
 * Arduino A5 (I2C SCL): SCL pin of display
+
+The DHT22 sensor is supplied from an Arduino output pin. The maximum current
+drawn by the sensor is around 1.5 mA, so the pin can easily supply the chip.
+This way the sensor can be switched off to save power and avoid self-heating
+of the sensor. The sensor is enabled 1s before a measurement is taken and
+switched off after the measurement.
 
 Required software libraries:
 ----------------------------
