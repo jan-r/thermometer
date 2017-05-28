@@ -49,7 +49,15 @@ typedef unsigned int  COORD;
 //#define WITH_TEST_COORDS
 
 // global display mode
-char displayMode = 0;
+char displayMode = 2;
+
+// temperature history
+#define HISTORY_VALUES            32      // must be power-of-two!
+#define HISTORY_INTERVAL_MSEC     600000
+
+float tempHistory[HISTORY_VALUES];
+int   currentHistoryIdx;
+int   numHistoryValues;
 
 // ----------------------------------------------------------------------------
 // Initial setup
@@ -70,6 +78,10 @@ void setup(void)
   digitalWrite(DHTPOWERPIN, HIGH);
   delay(1000);
   dht.begin();
+  // take initial measurement and initialize history with first value
+  updateSensors(millis());
+  addValueToHistory(fCurrentTemp);
+  addValueToHistory(fCurrentTemp);
 
   // initialize serial command interface
   Serial.begin(SERIAL_BAUDRATE);
@@ -126,6 +138,7 @@ void updateSensors(unsigned long currentTime)
       if (!isnan(event.relative_humidity)) {
         fCurrentHumidity = event.relative_humidity;
       }
+      trackHistory(currentTime);
       // switch off the sensor
       digitalWrite(DHTPOWERPIN, LOW);
       state = SLEEPING;
@@ -150,6 +163,34 @@ void updateSensors(unsigned long currentTime)
         state = MEASURING;
       }
       break;
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Track the history of the temperature values
+// ----------------------------------------------------------------------------
+void trackHistory(unsigned long currentTime)
+{
+  static unsigned long lastHistoryValueTaken = 0UL;
+
+  if ((currentTime - lastHistoryValueTaken) >= HISTORY_INTERVAL_MSEC)
+  {
+    lastHistoryValueTaken = currentTime;
+    addValueToHistory(fCurrentTemp);
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Add temperature value to history
+// ----------------------------------------------------------------------------
+void addValueToHistory(float value)
+{
+  // increment index and do a fast modulo calculation to handle overflow
+  currentHistoryIdx = (currentHistoryIdx + 1) & (HISTORY_VALUES - 1);
+  tempHistory[currentHistoryIdx] = value;
+  if (numHistoryValues < HISTORY_VALUES)
+  {
+    numHistoryValues++;
   }
 }
 
@@ -258,6 +299,7 @@ void displayBargraph()
   do
   {
     drawAxes();
+    drawGraph();
   } while ( u8g2.nextPage() );
 }
 
@@ -314,7 +356,7 @@ void readSensor(int argc, char **args)
 float fMinY = 16.0f;
 float fMaxY = 30.0f;
 float fMinX = 0.0f;
-float fMaxX = 100.0f;
+float fMaxX = (float)(HISTORY_VALUES-1);
 COORD marginBotPx = 10;
 COORD marginTopPx = 1;
 COORD marginLeftPx = 15;
@@ -406,5 +448,24 @@ void drawAxes()
   s = String(fTick, 0);
   s.toCharArray(buf, sizeof(buf));
   u8g2.drawStr(0, y+3, buf);
+}
+
+// ----------------------------------------------------------------------------
+// Draw graph of the history values
+// ----------------------------------------------------------------------------
+void drawGraph()
+{
+  for (int i = 1; i < numHistoryValues; i++)
+  {
+    int index_left = (currentHistoryIdx - i) & (HISTORY_VALUES - 1);
+    int index_right  = (currentHistoryIdx + 1 - i) & (HISTORY_VALUES - 1);
+    float pos_left = (float)(HISTORY_VALUES - 1) - i;
+    float pos_right = (float)(HISTORY_VALUES - i);
+    COORD leftx, lefty;
+    COORD rightx, righty;
+    pointToDisplayCoords(pos_left, tempHistory[index_left], leftx, lefty);
+    pointToDisplayCoords(pos_right, tempHistory[index_right], rightx, righty);
+    u8g2.drawLine(leftx, lefty, rightx, righty);
+  }
 }
 
