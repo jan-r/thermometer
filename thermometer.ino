@@ -317,6 +317,7 @@ void displayValues()
 // ----------------------------------------------------------------------------
 void displayBargraph()
 {
+  rescaleYAxis();
   u8g2.firstPage();
   do
   {
@@ -384,8 +385,34 @@ COORD marginTopPx = 1;
 COORD marginLeftPx = 15;
 COORD marginRightPx = 1;
 
+
 // ----------------------------------------------------------------------------
-/// Transform a floating point value to absolute display coordinates
+// Recalculate minimum and maximum Y axis values
+// ----------------------------------------------------------------------------
+void rescaleYAxis()
+{
+  float maxval = -1e15;
+  float minval = 1e15;
+
+  // find min/max value in history buffer
+  for (int i = 0; i < numHistoryValues; i++)
+  {
+    int index = (currentHistoryIdx - i) & (HISTORY_VALUES - 1);
+    if (tempHistory[index] < minval)
+    {
+      minval = tempHistory[index];
+    }
+    if (tempHistory[index] > maxval)
+    {
+      maxval = tempHistory[index];
+    }
+  }
+  fMinY = floor(minval) - 1.0f;
+  fMaxY = floor(maxval + 1.0f) + 1.0f;
+}
+
+// ----------------------------------------------------------------------------
+// Transform a floating point value to absolute display coordinates
 // ----------------------------------------------------------------------------
 bool pointToDisplayCoords(float fPointX, float fPointY, COORD& x, COORD& y)
 {
