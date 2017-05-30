@@ -59,6 +59,14 @@ float tempHistory[HISTORY_VALUES];
 int   currentHistoryIdx;
 int   numHistoryValues;
 
+// calibration
+#define REFERENCE_1     7.6f
+#define VALUE_1         7.0f
+#define REFERENCE_2     29.1f
+#define VALUE_2         30.4f
+float calibrationFactor = 1.0f;
+float calibrationOffset = 0.0f;
+
 // ----------------------------------------------------------------------------
 // Initial setup
 // ----------------------------------------------------------------------------
@@ -77,6 +85,7 @@ void setup(void)
   pinMode(DHTPOWERPIN, OUTPUT);
   digitalWrite(DHTPOWERPIN, HIGH);
   delay(1000);
+  calibrate(REFERENCE_1, VALUE_1, REFERENCE_2, VALUE_2);
   dht.begin();
   // take initial measurement and initialize history with first value
   updateSensors(millis());
@@ -112,6 +121,19 @@ void loop(void)
 }
 
 // ----------------------------------------------------------------------------
+// Calculate calibration values calibrationFactor and calibrationOffset from
+// two measured values
+// ref1/ref2: reference temperatures
+// val1/val2: measured values at the given temperature
+// ----------------------------------------------------------------------------
+void calibrate(float ref1, float val1, float ref2, float val2)
+{
+  calibrationFactor = (ref2 - ref1) / (val2 - val1);
+  calibrationOffset = (val2 * ref1 - val1 * ref2) / (val2 - val1);
+}
+
+
+// ----------------------------------------------------------------------------
 // Fetch the current sensor values and update the global variables
 // fCurrentTemp and fCurrentHumidity.
 // ----------------------------------------------------------------------------
@@ -132,7 +154,7 @@ void updateSensors(unsigned long currentTime)
       dht.temperature().getEvent(&event);
       if (!isnan(event.temperature))
       {
-        fCurrentTemp = event.temperature;
+        fCurrentTemp = event.temperature * calibrationFactor + calibrationOffset;
       }
       dht.humidity().getEvent(&event);
       if (!isnan(event.relative_humidity)) {
