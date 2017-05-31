@@ -21,20 +21,40 @@
 #include <DHT_U.h>
 #include <Cmd.h>
 
+// ----------------------------------------------------------------------------
+// Hardware setup
+// ----------------------------------------------------------------------------
 #define DHTPIN            2         // Pin which is connected to the DHT sensor.
 #define DHTPOWERPIN       3         // Pin which supplies the DHT sensor with power.
-#define DHTTYPE           DHT22     // DHT 22 (AM2302)
-
-DHT_Unified dht(DHTPIN, DHTTYPE);
+#define DISP_DATA         A4        // HW I2C data line to display
+#define DISP_CLOCK        A5        // HW I2C clock line to display
 
 #define SERIAL_BAUDRATE   57600
 
-#define DEGREE '\xb0'
+
+// ----------------------------------------------------------------------------
+// DHT22 sensor
+// ----------------------------------------------------------------------------
+#define DHTTYPE           DHT22     // DHT 22 (AM2302)
+DHT_Unified dht(DHTPIN, DHTTYPE);
+
+#define DEGREE '\xb0'               // degree symbol
 float fCurrentTemp = 99.9f;
 float fCurrentHumidity = 99.9f;
 
+// calibration
+#define REFERENCE_1     7.6f
+#define VALUE_1         7.0f
+#define REFERENCE_2     29.1f
+#define VALUE_2         30.4f
+float calibrationFactor = 1.0f;
+float calibrationOffset = 0.0f;
 
-U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* clock=*/ A5, /* data=*/ A4, /* reset=*/ U8X8_PIN_NONE);   // All Boards without Reset of the Display
+
+// ----------------------------------------------------------------------------
+// Display
+// ----------------------------------------------------------------------------
+U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, DISP_CLOCK, DISP_DATA, U8X8_PIN_NONE);
 #define DISPLAY_RES_X   128
 #define DISPLAY_RES_Y   64
 
@@ -59,13 +79,6 @@ float tempHistory[HISTORY_VALUES];
 int   currentHistoryIdx;
 int   numHistoryValues;
 
-// calibration
-#define REFERENCE_1     7.6f
-#define VALUE_1         7.0f
-#define REFERENCE_2     29.1f
-#define VALUE_2         30.4f
-float calibrationFactor = 1.0f;
-float calibrationOffset = 0.0f;
 
 // ----------------------------------------------------------------------------
 // Initial setup
@@ -100,7 +113,6 @@ void setup(void)
   cmdAdd("tc", testCoords);
   #endif
   cmdAdd("dm", setDisplayMode);
-  Serial.println("Rdy");
 }
 
 // ----------------------------------------------------------------------------
