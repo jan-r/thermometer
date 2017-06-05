@@ -423,6 +423,12 @@ void rescaleYAxis()
   }
   fMinY = floor(minval) - 1.0f;
   fMaxY = floor(maxval + 1.0f) + 1.0f;
+  
+  // make sure the difference can be divided by 2
+  if ((int)(fMaxY - fMinY) & 1)
+  {
+    fMaxY += 1.0f;
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -512,6 +518,12 @@ void drawAxes()
   s = String(fTick, 0);
   s.toCharArray(buf, sizeof(buf));
   u8g2.drawStr(0, y+3, buf);
+  drawDottedHLine(fTick, DOTTED_LINE_DELTA);
+
+  fTick = floor((fMinY + fMaxY) / 2.0);
+  pointToDisplayCoords(fMinX, fTick, x, y);
+  u8g2.drawPixel(x-1, y);
+  u8g2.drawPixel(x-2, y);
   drawDottedHLine(fTick, DOTTED_LINE_DELTA);
 }
 
