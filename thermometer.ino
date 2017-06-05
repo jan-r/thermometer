@@ -66,6 +66,7 @@ typedef unsigned int  COORD;
 #endif
 
 #define DISPLAY_ALTERNATING_SECONDS   5
+#define DOTTED_LINE_DELTA             10
 //#define WITH_TEST_COORDS
 
 // global display mode
@@ -73,7 +74,8 @@ char displayMode = 2;
 
 // temperature history
 #define HISTORY_VALUES            32      // must be power-of-two!
-#define HISTORY_INTERVAL_MSEC     600000
+#define HISTORY_INTERVAL_MSEC     600000  // 600s == 10 minutes
+//#define HISTORY_INTERVAL_MSEC     10000   // 10s for testing
 
 float tempHistory[HISTORY_VALUES];
 int   currentHistoryIdx;
@@ -501,6 +503,7 @@ void drawAxes()
   String s = String(fTick, 0);
   s.toCharArray(buf, sizeof(buf));
   u8g2.drawStr(0, y+3, buf);
+  drawDottedHLine(fTick, DOTTED_LINE_DELTA);
 
   fTick = floor(fMaxY - 1.0f);
   pointToDisplayCoords(fMinX, fTick, x, y);
@@ -509,6 +512,23 @@ void drawAxes()
   s = String(fTick, 0);
   s.toCharArray(buf, sizeof(buf));
   u8g2.drawStr(0, y+3, buf);
+  drawDottedHLine(fTick, DOTTED_LINE_DELTA);
+}
+
+// ----------------------------------------------------------------------------
+// Draw a dotted horizontal auxillary line (with delta pixels between two dots)
+// ----------------------------------------------------------------------------
+void drawDottedHLine(float y, COORD delta)
+{
+  COORD xstart, ycoord, xend;
+  pointToDisplayCoords(fMinX, y, xstart, ycoord);
+  pointToDisplayCoords(fMaxX, y, xend, ycoord);
+
+  while (xstart <= xend)
+  {
+    u8g2.drawPixel(xstart, ycoord);
+    xstart += delta;
+  }
 }
 
 // ----------------------------------------------------------------------------
