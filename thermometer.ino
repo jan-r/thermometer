@@ -26,6 +26,9 @@
 // ----------------------------------------------------------------------------
 #define DHTPIN            2         // Pin which is connected to the DHT sensor.
 #define DHTPOWERPIN       3         // Pin which supplies the DHT sensor with power.
+#define DCF77POWERPIN     4         // Pin to control power of the DCF77 module (low == on)
+#define DCF77SIGNALPIN    5         // Pin which connects to the DCF77 time signal 
+
 #define DISP_DATA         A4        // HW I2C data line to display
 #define DISP_CLOCK        A5        // HW I2C clock line to display
 
@@ -49,6 +52,25 @@ float fCurrentHumidity = 99.9f;
 #define VALUE_2         30.4f
 float calibrationFactor = 1.0f;
 float calibrationOffset = 0.0f;
+
+
+// ----------------------------------------------------------------------------
+// DCF77 module
+// ----------------------------------------------------------------------------
+#define DCF77_MIN_ZERO    70      // minimum pulse width for "zero"
+#define DCF77_MAX_ZERO    120     // maximum pulse width for "zero"
+#define DCF77_MIN_ONE     170     // minimum pulse width for "one"
+#define DCF77_MAX_ONE     220     // maximum pulse width for "one"
+#define DCF77_DEBUG               // define to add serial debugging output
+int state;
+int state_old;
+unsigned long last_pulse_start;
+unsigned long last_pulse_end;
+int cbit = -1;
+unsigned long timebits;
+unsigned long datebits;
+int hour = -1;
+int minute = -1;
 
 
 // ----------------------------------------------------------------------------
@@ -96,6 +118,11 @@ void setup(void)
     u8g2.drawStr(0,24,"Hi!");
   } while ( u8g2.nextPage() );
 
+  // initialize the DCF77 module pins (but keep powered off, needs ~1s startup delay)
+  pinMode(DCF77POWERPIN, OUTPUT);
+  pinMode(DCF77SIGNALPIN, INPUT);
+  digitalWrite(DCF77POWERPIN, HIGH);
+
   // power up and initialize DHT22 sensor
   pinMode(DHTPOWERPIN, OUTPUT);
   digitalWrite(DHTPOWERPIN, HIGH);
@@ -107,6 +134,11 @@ void setup(void)
   addValueToHistory(fCurrentTemp);
   addValueToHistory(fCurrentTemp);
 
+  // power up the DCF77 module
+  digitalWrite(DCF77POWERPIN, LOW);
+  last_pulse_start = millis();
+  last_pulse_end = last_pulse_start;
+
   // initialize serial command interface
   Serial.begin(SERIAL_BAUDRATE);
   cmdInit(&Serial);
@@ -117,21 +149,29 @@ void setup(void)
   cmdAdd("dm", setDisplayMode);
 }
 
+
 // ----------------------------------------------------------------------------
 // The cyclic main loop
 // ----------------------------------------------------------------------------
 void loop(void)
 {
   unsigned long currentTime = millis();
+  bool runOtherTasks;
+  
+  // process the DCF77 time signal
+  runOtherTasks = dcf77_process(currentTime);
 
-  // handle the connected sensors
-  updateSensors(currentTime);
+  if (runOtherTasks)
+  {
+    // handle the connected sensors
+    updateSensors(currentTime);
+  
+    // handle the display
+    updateDisplay(currentTime);
 
-  // handle the display
-  updateDisplay(currentTime);
-
-  // handle serial interface
-  cmdPoll();
+    // handle serial interface
+    cmdPoll();
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -560,5 +600,143 @@ void drawGraph()
     pointToDisplayCoords(pos_right, tempHistory[index_right], rightx, righty);
     u8g2.drawLine(leftx, lefty, rightx, righty);
   }
+}
+
+// ----------------------------------------------------------------------------
+// Process the DCF77 signal.
+// Return true if a high-to-low-transition was detected.
+// ----------------------------------------------------------------------------
+#define DCF77_DEBOUNCE_CYCLES   2
+bool dcf77_process(unsigned long currentTime)
+{
+  static unsigned long last_update = 0;
+  static int debounce_count = 0;
+  bool high2low = false;
+
+  // only process every 2 ms to get some debouncing and glitch immunity
+  if (currentTime - last_update > 2)
+  {
+    int current_pin_value = digitalRead(DCF77SIGNALPIN);
+    last_update = currentTime;
+
+    // debounce the pin
+    if (current_pin_value == HIGH)
+    {
+      if (debounce_count < DCF77_DEBOUNCE_CYCLES)
+      {
+        debounce_count++;
+      }
+      else
+      {
+        state = HIGH;
+      }
+    }
+    else
+    {
+      if (debounce_count > 0)
+      {
+        debounce_count--;
+      }
+      else
+      {
+        state = LOW;
+      }
+    }
+    
+    if ((state == LOW) && (state_old == HIGH))
+    {
+      // end of pulse
+      int pulse;
+      int bitvalue = -1;
+      high2low = true;
+  
+      last_pulse_end = currentTime;
+      pulse = last_pulse_end - last_pulse_start;
+      if ((pulse >= DCF77_MIN_ZERO) && (pulse <= DCF77_MAX_ZERO))
+      {
+        bitvalue = 0;
+      }
+      else if ((pulse >= DCF77_MIN_ONE) && (pulse <= DCF77_MAX_ONE))
+      {
+        bitvalue = 1;
+      }
+      
+      #ifdef DCF77_DEBUG
+      // print bitstream for debugging
+      Serial.print(bitvalue);
+      #endif
+      
+      if (bitvalue < 0)
+      {
+        // error, discard cycle
+        cbit = -1;
+        #ifdef DCF77_DEBUG
+        // print invalid cycle time
+        Serial.write('(');
+        Serial.print(pulse);
+        Serial.write(')');
+        #endif
+      }
+      else
+      {
+        if (cbit == 20)
+        {
+          timebits = 0;
+          datebits = 0;
+        }
+        else if ((cbit >= 21) && (cbit <= 35))
+        {
+          timebits |= bitvalue << (cbit - 21);
+        }
+        else if ((cbit >= 36) && (cbit <= 58))
+        {
+          datebits |= (unsigned long)bitvalue << (cbit - 36);
+        }
+      }    
+    }
+    else if ((state == HIGH) && (state_old == LOW))
+    {
+      // start of pulse
+      last_pulse_start = currentTime;
+      if (last_pulse_start - last_pulse_end > 1500)
+      {
+        #ifdef DCF77_DEBUG
+        if (cbit < 0)
+        {
+          // last cycle was invalid, fresh sync
+          Serial.println();
+          Serial.println("--sync--");
+        }
+        else
+        {
+          // cycle valid, print time
+          minute = (timebits & 0x0F) + 10 * ((timebits >> 4) & 0x07);
+          hour = ((timebits >> 8) & 0x0F) + 10 * ((timebits >> 12) & 0x03);
+          Serial.println();
+          if (hour < 10)
+          {
+            Serial.write('0');
+          }
+          Serial.print(hour);
+          Serial.write(':');
+          if (minute < 10)
+          {
+            Serial.write('0');
+          }
+          Serial.println(minute);
+        }
+        #endif
+        // start new cycle
+        cbit = 0;
+      }
+      else if (cbit >= 0)
+      {
+        cbit++;
+      }
+    }
+    state_old = state;
+
+  }
+  return high2low;
 }
 
