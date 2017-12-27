@@ -42,7 +42,7 @@
 // Constructor
 // ----------------------------------------------------------------------------
 DCF77_Module::DCF77_Module(int powerPin, int signalPin)
-: pinPower(powerPin), pinSignal(signalPin), cbit(-1), hour(-1), minute(-1)
+: pinPower(powerPin), pinSignal(signalPin), cbit(-1)
 {
   pinMode(pinPower, OUTPUT);
   pinMode(pinSignal, INPUT);
@@ -166,21 +166,26 @@ bool DCF77_Module::process(unsigned long currentTime)
         else
         {
           // cycle valid, print time
-          unsigned long timebits = (bits[0] >> 21) | (bits[1] << 11);
-          minute = (timebits & 0x0F) + 10 * ((timebits >> 4) & 0x07);
-          hour = ((timebits >> 8) & 0x0F) + 10 * ((timebits >> 12) & 0x03);
+          int h = hour();
+          int m = minute();
           Serial.println();
-          if (hour < 10)
+          if (h < 10)
           {
             Serial.write('0');
           }
-          Serial.print(hour);
+          Serial.print(h);
           Serial.write(':');
-          if (minute < 10)
+          if (m < 10)
           {
             Serial.write('0');
           }
-          Serial.println(minute);
+          Serial.print(m);
+          Serial.write(' ');
+          Serial.print(day());
+          Serial.write('.');
+          Serial.print(month());
+          Serial.write('.');
+          Serial.println(year());
         }
         #endif
 
@@ -197,5 +202,32 @@ bool DCF77_Module::process(unsigned long currentTime)
 
   }
   return high2low;
+}
+
+int DCF77_Module::hour()
+{
+  unsigned long timebits = (bits[0] >> 21) | (bits[1] << 11);
+  return ((timebits >> 8) & 0x0F) + 10 * ((timebits >> 12) & 0x03);
+}
+
+int DCF77_Module::minute()
+{
+  unsigned long timebits = (bits[0] >> 21) | (bits[1] << 11);
+  return (timebits & 0x0F) + 10 * ((timebits >> 4) & 0x07);
+}
+
+int DCF77_Module::day()
+{
+  return ((bits[1] >> 4) & 0xFU) + 10 * ((bits[1] >> 8) & 0x3);
+}
+
+int DCF77_Module::month()
+{
+  return ((bits[1] >> 13) & 0xFU) + 10 * ((bits[1] >> 17) & 0x1);
+}
+
+int DCF77_Module::year()
+{
+  return ((bits[1] >> 18) & 0xFU) + 10 * ((bits[1] >> 22) & 0xFU);
 }
 

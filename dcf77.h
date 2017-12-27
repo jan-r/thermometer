@@ -64,8 +64,13 @@ private:
   unsigned long lastPulseEnd;
   int cbit;
   unsigned long bits[2];
-  int hour;
-  int minute;
+
+  int hour();
+  int minute();
+  int day();
+  int month();
+  int year();
+
 };
 
 
