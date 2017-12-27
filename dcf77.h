@@ -63,8 +63,7 @@ private:
   unsigned long lastPulseStart;
   unsigned long lastPulseEnd;
   int cbit;
-  unsigned long timebits;
-  unsigned long datebits;
+  unsigned long bits[2];
   int hour;
   int minute;
 };

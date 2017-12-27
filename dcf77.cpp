@@ -137,18 +137,14 @@ bool DCF77_Module::process(unsigned long currentTime)
       }
       else
       {
-        if (cbit == 20)
+        // valid bit length, store value
+        if (cbit >= 32)
         {
-          timebits = 0;
-          datebits = 0;
+          bits[1] |= bitvalue << (cbit - 32);
         }
-        else if ((cbit >= 21) && (cbit <= 35))
+        else if (cbit >= 0)
         {
-          timebits |= bitvalue << (cbit - 21);
-        }
-        else if ((cbit >= 36) && (cbit <= 58))
-        {
-          datebits |= (unsigned long)bitvalue << (cbit - 36);
+          bits[0] |= bitvalue << cbit;
         }
       }    
     }
@@ -158,6 +154,8 @@ bool DCF77_Module::process(unsigned long currentTime)
       lastPulseStart = currentTime;
       if (lastPulseStart - lastPulseEnd > 1500)
       {
+        // start of new one-minute-cycle detected
+        
         #ifdef DCF77_DEBUG
         if (cbit < 0)
         {
@@ -168,6 +166,7 @@ bool DCF77_Module::process(unsigned long currentTime)
         else
         {
           // cycle valid, print time
+          unsigned long timebits = (bits[0] >> 21) | (bits[1] << 11);
           minute = (timebits & 0x0F) + 10 * ((timebits >> 4) & 0x07);
           hour = ((timebits >> 8) & 0x0F) + 10 * ((timebits >> 12) & 0x03);
           Serial.println();
@@ -186,6 +185,7 @@ bool DCF77_Module::process(unsigned long currentTime)
         #endif
         // start new cycle
         cbit = 0;
+        bits[0] = bits[1] = 0UL;
       }
       else if (cbit >= 0)
       {
