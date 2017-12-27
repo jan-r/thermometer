@@ -30,9 +30,9 @@
 */
 #include "dcf77.h"
 
-#define DCF77_MIN_ZERO    70      // minimum pulse width for "zero"
+#define DCF77_MIN_ZERO    55      // minimum pulse width for "zero"
 #define DCF77_MAX_ZERO    120     // maximum pulse width for "zero"
-#define DCF77_MIN_ONE     170     // minimum pulse width for "one"
+#define DCF77_MIN_ONE     155     // minimum pulse width for "one"
 #define DCF77_MAX_ONE     220     // maximum pulse width for "one"
 
 #define DCF77_DEBOUNCE_CYCLES   2
@@ -140,11 +140,11 @@ bool DCF77_Module::process(unsigned long currentTime)
         // valid bit length, store value
         if (cbit >= 32)
         {
-          bits[1] |= bitvalue << (cbit - 32);
+          bits[1] |= (unsigned long)bitvalue << (cbit - 32);
         }
         else if (cbit >= 0)
         {
-          bits[0] |= bitvalue << cbit;
+          bits[0] |= (unsigned long)bitvalue << cbit;
         }
       }    
     }
@@ -183,6 +183,7 @@ bool DCF77_Module::process(unsigned long currentTime)
           Serial.println(minute);
         }
         #endif
+
         // start new cycle
         cbit = 0;
         bits[0] = bits[1] = 0UL;
