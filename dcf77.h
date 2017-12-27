@@ -54,7 +54,8 @@ public:
 
   // Disable the module
   void disable();
-  
+
+private:
   int pinPower;
   int pinSignal;
   int state;
