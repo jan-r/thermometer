@@ -35,6 +35,7 @@
 
 #include <Arduino.h>
 #include <U8g2lib.h>
+#include <Time.h>
 
 #ifdef U8X8_HAVE_HW_SPI
 #include <SPI.h>
@@ -155,6 +156,7 @@ void setup(void)
   cmdAdd("tc", testCoords);
   #endif
   cmdAdd("dm", setDisplayMode);
+  cmdAdd("tm", printTime);
 }
 
 
@@ -610,4 +612,33 @@ void drawGraph()
   }
 }
 
+// ----------------------------------------------------------------------------
+// Print the current time
+// ----------------------------------------------------------------------------
+void printTime(int argc, char **args)
+{
+  Stream *s = cmdGetStream();
+  int value;
+  s->print(hour());
+  s->write(':');
+  value = minute();
+  if (value < 10)
+  {
+    s->write('0');
+  }
+  s->print(value);
+  s->write(':');
+  value = second();
+  if (value < 10)
+  {
+    s->write('0');
+  }
+  s->print(value);
+  s->write(' ');
+  s->print(day());
+  s->write('.');
+  s->print(month());
+  s->write('.');
+  s->println(year());
+}
 

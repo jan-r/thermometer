@@ -29,6 +29,7 @@
   ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  
 */
 #include "dcf77.h"
+#include <Time.h>
 
 #define DCF77_MIN_ZERO    55      // minimum pulse width for "zero"
 #define DCF77_MAX_ZERO    120     // maximum pulse width for "zero"
@@ -156,18 +157,26 @@ bool DCF77_Module::process(unsigned long currentTime)
       {
         // start of new one-minute-cycle detected
         
-        #ifdef DCF77_DEBUG
         if (cbit < 0)
         {
           // last cycle was invalid, fresh sync
+          #ifdef DCF77_DEBUG
           Serial.println();
           Serial.println("--sync--");
+          #endif
         }
         else
         {
-          // cycle valid, print time
+          // cycle valid, sync internal clock
           int h = hour();
           int m = minute();
+          int d = day();
+          int mo = month();
+          int y = year() + 2000;
+
+          setTime(h, m, 0, d, mo, y);
+
+          #ifdef DCF77_DEBUG
           Serial.println();
           if (h < 10)
           {
@@ -181,13 +190,13 @@ bool DCF77_Module::process(unsigned long currentTime)
           }
           Serial.print(m);
           Serial.write(' ');
-          Serial.print(day());
+          Serial.print(d);
           Serial.write('.');
-          Serial.print(month());
+          Serial.print(mo);
           Serial.write('.');
-          Serial.println(year());
+          Serial.println(y);
+          #endif
         }
-        #endif
 
         // start new cycle
         cbit = 0;

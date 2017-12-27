@@ -37,7 +37,7 @@
 
 #include <Arduino.h>
 
-#define DCF77_DEBUG               // define to add serial debugging output
+//#define DCF77_DEBUG               // define to add serial debugging output
 
 
 class DCF77_Module
