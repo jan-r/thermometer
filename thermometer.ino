@@ -115,9 +115,9 @@ char displayMode = 2;
 #define HISTORY_INTERVAL_MSEC     600000  // 600s == 10 minutes
 //#define HISTORY_INTERVAL_MSEC     10000   // 10s for testing
 
-float tempHistory[HISTORY_VALUES];
-int   currentHistoryIdx;
-int   numHistoryValues;
+float         tempHistory[HISTORY_VALUES];
+unsigned char currentHistoryIdx;
+unsigned char numHistoryValues;
 
 
 // ----------------------------------------------------------------------------
@@ -461,7 +461,7 @@ void rescaleYAxis()
   // find min/max value in history buffer
   for (int i = 0; i < numHistoryValues; i++)
   {
-    int index = (currentHistoryIdx - i) & (HISTORY_VALUES - 1);
+    unsigned char index = (currentHistoryIdx - i) & (HISTORY_VALUES - 1);
     if (tempHistory[index] < minval)
     {
       minval = tempHistory[index];
@@ -598,10 +598,10 @@ void drawDottedHLine(float y, COORD delta)
 // ----------------------------------------------------------------------------
 void drawGraph()
 {
-  for (int i = 1; i < numHistoryValues; i++)
+  for (unsigned char i = 1; i < numHistoryValues; i++)
   {
-    int index_left = (currentHistoryIdx - i) & (HISTORY_VALUES - 1);
-    int index_right  = (currentHistoryIdx + 1 - i) & (HISTORY_VALUES - 1);
+    unsigned char index_left = (currentHistoryIdx - i) & (HISTORY_VALUES - 1);
+    unsigned char index_right  = (currentHistoryIdx + 1 - i) & (HISTORY_VALUES - 1);
     float pos_left = (float)(HISTORY_VALUES - 1) - i;
     float pos_right = (float)(HISTORY_VALUES - i);
     COORD leftx, lefty;

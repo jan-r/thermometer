@@ -58,11 +58,11 @@ public:
 private:
   int pinPower;
   int pinSignal;
-  int state;
-  int stateOld;
+  char tcoLineState;
+  char tcoLineStateOld;
   unsigned long lastPulseStart;
   unsigned long lastPulseEnd;
-  int cbit;
+  char currentBitIndex;
   unsigned long bits[2];
 
   int hour();

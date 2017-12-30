@@ -43,7 +43,7 @@
 // Constructor
 // ----------------------------------------------------------------------------
 DCF77_Module::DCF77_Module(int powerPin, int signalPin)
-: pinPower(powerPin), pinSignal(signalPin), cbit(-1)
+: pinPower(powerPin), pinSignal(signalPin), currentBitIndex(-1)
 {
   pinMode(pinPower, OUTPUT);
   pinMode(pinSignal, INPUT);
@@ -87,7 +87,7 @@ bool DCF77_Module::process(unsigned long currentTime)
       }
       else
       {
-        state = HIGH;
+        tcoLineState = HIGH;
       }
     }
     else
@@ -98,11 +98,11 @@ bool DCF77_Module::process(unsigned long currentTime)
       }
       else
       {
-        state = LOW;
+        tcoLineState = LOW;
       }
     }
     
-    if ((state == LOW) && (stateOld == HIGH))
+    if ((tcoLineState == LOW) && (tcoLineStateOld == HIGH))
     {
       // end of pulse
       int pulse;
@@ -128,7 +128,7 @@ bool DCF77_Module::process(unsigned long currentTime)
       if (bitvalue < 0)
       {
         // error, discard cycle
-        cbit = -1;
+        currentBitIndex = -1;
         #ifdef DCF77_DEBUG
         // print invalid cycle time
         Serial.write('(');
@@ -139,17 +139,17 @@ bool DCF77_Module::process(unsigned long currentTime)
       else
       {
         // valid bit length, store value
-        if (cbit >= 32)
+        if (currentBitIndex >= 32)
         {
-          bits[1] |= (unsigned long)bitvalue << (cbit - 32);
+          bits[1] |= (unsigned long)bitvalue << (currentBitIndex - 32);
         }
-        else if (cbit >= 0)
+        else if (currentBitIndex >= 0)
         {
-          bits[0] |= (unsigned long)bitvalue << cbit;
+          bits[0] |= (unsigned long)bitvalue << currentBitIndex;
         }
       }    
     }
-    else if ((state == HIGH) && (stateOld == LOW))
+    else if ((tcoLineState == HIGH) && (tcoLineStateOld == LOW))
     {
       // start of pulse
       lastPulseStart = currentTime;
@@ -157,7 +157,7 @@ bool DCF77_Module::process(unsigned long currentTime)
       {
         // start of new one-minute-cycle detected
         
-        if (cbit < 0)
+        if (currentBitIndex < 0)
         {
           // last cycle was invalid, fresh sync
           #ifdef DCF77_DEBUG
@@ -199,15 +199,15 @@ bool DCF77_Module::process(unsigned long currentTime)
         }
 
         // start new cycle
-        cbit = 0;
+        currentBitIndex = 0;
         bits[0] = bits[1] = 0UL;
       }
-      else if (cbit >= 0)
+      else if (currentBitIndex >= 0)
       {
-        cbit++;
+        currentBitIndex++;
       }
     }
-    stateOld = state;
+    tcoLineStateOld = tcoLineState;
 
   }
   return high2low;
