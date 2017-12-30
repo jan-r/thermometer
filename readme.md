@@ -65,6 +65,6 @@ The following commands can be given over the serial interface (57600 baud, 8-N-1
         * 1: show bargraph
         * 2: alternate between values and bargraph
  
-    tm      print current time
+    now     print current time
         Print the current time and date.
 

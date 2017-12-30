@@ -156,7 +156,7 @@ void setup(void)
   cmdAdd("tc", testCoords);
   #endif
   cmdAdd("dm", setDisplayMode);
-  cmdAdd("tm", printTime);
+  cmdAdd("now", printTime);
 }
 
 
@@ -613,32 +613,87 @@ void drawGraph()
 }
 
 // ----------------------------------------------------------------------------
+// Format the given time into a nice string
+//
+// The string is prefixed with the given prefix character if the hour is < 10.
+// Passing 0 as prefix suppresses the prefix. To actually print a 0, pass '0'
+// as prefix.
+// ----------------------------------------------------------------------------
+void formatTime(time_t t, String *ps, char prefix = 0)
+{
+  // hours with optional leading zero
+  char value = hour(t);
+  if ((value < 10) && prefix)
+  {
+    // add prefix to string
+    *ps += prefix;
+  }
+  *ps += (int)value;
+  *ps += ':';
+
+  // minutes
+  value = minute(t);
+  if (value < 10)
+  {
+    // leading zero
+    *ps += '0';
+  }
+  *ps += (int)value;
+  *ps += ':';
+  
+  // seconds
+  value = minute(t);
+  if (value < 10)
+  {
+    // leading zero
+    *ps += '0';
+  }
+  *ps += (int)value;
+}
+
+// ----------------------------------------------------------------------------
+// Format the given date into a nice string (dd.mm.yyyy)
+// ----------------------------------------------------------------------------
+void formatDate(time_t t, String *ps)
+{
+  // day with optional leading zero
+  char value = day(t);
+  if (value < 10)
+  {
+    // leading zero
+    *ps += '0';
+  }
+  *ps += (int)value;
+  *ps += '.';
+
+  // month
+  value = month(t);
+  if (value < 10)
+  {
+    // leading zero
+    *ps += '0';
+  }
+  *ps += (int)value;
+  *ps += '.';
+  
+  // year
+  *ps += year(t);
+}
+
+// ----------------------------------------------------------------------------
 // Print the current time
 // ----------------------------------------------------------------------------
 void printTime(int argc, char **args)
 {
   Stream *s = cmdGetStream();
-  int value;
-  s->print(hour());
-  s->write(':');
-  value = minute();
-  if (value < 10)
-  {
-    s->write('0');
-  }
-  s->print(value);
-  s->write(':');
-  value = second();
-  if (value < 10)
-  {
-    s->write('0');
-  }
-  s->print(value);
+  String timestring;
+  String datestring;
+  time_t tm = now();
+  formatTime(tm, &timestring);
+  formatDate(tm, &datestring);
+  
+  s->print(timestring);
   s->write(' ');
-  s->print(day());
-  s->write('.');
-  s->print(month());
-  s->write('.');
-  s->println(year());
+  s->println(datestring);
 }
 
