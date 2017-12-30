@@ -55,11 +55,13 @@ void DCF77_Module::enable()
   digitalWrite(pinPower, LOW);
   lastPulseStart = millis();
   lastPulseEnd = lastPulseStart;
+  isPowered = true;
 }
 
 void DCF77_Module::disable()
 {
   digitalWrite(pinPower, HIGH);
+  isPowered = false;
 }
 
 // ----------------------------------------------------------------------------
@@ -72,143 +74,153 @@ bool DCF77_Module::process(unsigned long currentTime)
   static int debounce_count = 0;
   bool high2low = false;
 
-  // only process every 2 ms to get some debouncing and glitch immunity
-  if (currentTime - last_update > 2)
+  // only process the signal if the module is powered on
+  if (!isPowered)
   {
-    int current_pin_value = digitalRead(pinSignal);
-    last_update = currentTime;
-
-    // debounce the pin
-    if (current_pin_value == HIGH)
+    // in this case, we can always act as if we just detected a bit so other
+    // tasks can be triggered immediately
+    high2low = true;
+  }
+  else
+  {
+    // only process every 2 ms to get some debouncing and glitch immunity
+    if (currentTime - last_update > 2)
     {
-      if (debounce_count < DCF77_DEBOUNCE_CYCLES)
-      {
-        debounce_count++;
-      }
-      else
-      {
-        tcoLineState = HIGH;
-      }
-    }
-    else
-    {
-      if (debounce_count > 0)
-      {
-        debounce_count--;
-      }
-      else
-      {
-        tcoLineState = LOW;
-      }
-    }
-    
-    if ((tcoLineState == LOW) && (tcoLineStateOld == HIGH))
-    {
-      // end of pulse
-      int pulse;
-      int bitvalue = -1;
-      high2low = true;
+      int current_pin_value = digitalRead(pinSignal);
+      last_update = currentTime;
   
-      lastPulseEnd = currentTime;
-      pulse = lastPulseEnd - lastPulseStart;
-      if ((pulse >= DCF77_MIN_ZERO) && (pulse <= DCF77_MAX_ZERO))
+      // debounce the pin
+      if (current_pin_value == HIGH)
       {
-        bitvalue = 0;
-      }
-      else if ((pulse >= DCF77_MIN_ONE) && (pulse <= DCF77_MAX_ONE))
-      {
-        bitvalue = 1;
-      }
-      
-      #ifdef DCF77_DEBUG
-      // print bitstream for debugging
-      Serial.print(bitvalue);
-      #endif
-      
-      if (bitvalue < 0)
-      {
-        // error, discard cycle
-        currentBitIndex = -1;
-        #ifdef DCF77_DEBUG
-        // print invalid cycle time
-        Serial.write('(');
-        Serial.print(pulse);
-        Serial.write(')');
-        #endif
+        if (debounce_count < DCF77_DEBOUNCE_CYCLES)
+        {
+          debounce_count++;
+        }
+        else
+        {
+          tcoLineState = HIGH;
+        }
       }
       else
       {
-        // valid bit length, store value
-        if (currentBitIndex >= 32)
+        if (debounce_count > 0)
         {
-          bits[1] |= (unsigned long)bitvalue << (currentBitIndex - 32);
+          debounce_count--;
         }
-        else if (currentBitIndex >= 0)
+        else
         {
-          bits[0] |= (unsigned long)bitvalue << currentBitIndex;
+          tcoLineState = LOW;
         }
-      }    
-    }
-    else if ((tcoLineState == HIGH) && (tcoLineStateOld == LOW))
-    {
-      // start of pulse
-      lastPulseStart = currentTime;
-      if (lastPulseStart - lastPulseEnd > 1500)
+      }
+      
+      if ((tcoLineState == LOW) && (tcoLineStateOld == HIGH))
       {
-        // start of new one-minute-cycle detected
-        
-        if (currentBitIndex < 0)
+        // end of pulse
+        int pulse;
+        int bitvalue = -1;
+        high2low = true;
+    
+        lastPulseEnd = currentTime;
+        pulse = lastPulseEnd - lastPulseStart;
+        if ((pulse >= DCF77_MIN_ZERO) && (pulse <= DCF77_MAX_ZERO))
         {
-          // last cycle was invalid, fresh sync
+          bitvalue = 0;
+        }
+        else if ((pulse >= DCF77_MIN_ONE) && (pulse <= DCF77_MAX_ONE))
+        {
+          bitvalue = 1;
+        }
+        
+        #ifdef DCF77_DEBUG
+        // print bitstream for debugging
+        Serial.print(bitvalue);
+        #endif
+        
+        if (bitvalue < 0)
+        {
+          // error, discard cycle
+          currentBitIndex = -1;
           #ifdef DCF77_DEBUG
-          Serial.println();
-          Serial.println("--sync--");
+          // print invalid cycle time
+          Serial.write('(');
+          Serial.print(pulse);
+          Serial.write(')');
           #endif
         }
         else
         {
-          // cycle valid, sync internal clock
-          int h = hour();
-          int m = minute();
-          int d = day();
-          int mo = month();
-          int y = year() + 2000;
-
-          setTime(h, m, 0, d, mo, y);
-
-          #ifdef DCF77_DEBUG
-          Serial.println();
-          if (h < 10)
+          // valid bit length, store value
+          if (currentBitIndex >= 32)
           {
-            Serial.write('0');
+            bits[1] |= (unsigned long)bitvalue << (currentBitIndex - 32);
           }
-          Serial.print(h);
-          Serial.write(':');
-          if (m < 10)
+          else if (currentBitIndex >= 0)
           {
-            Serial.write('0');
+            bits[0] |= (unsigned long)bitvalue << currentBitIndex;
           }
-          Serial.print(m);
-          Serial.write(' ');
-          Serial.print(d);
-          Serial.write('.');
-          Serial.print(mo);
-          Serial.write('.');
-          Serial.println(y);
-          #endif
-        }
-
-        // start new cycle
-        currentBitIndex = 0;
-        bits[0] = bits[1] = 0UL;
+        }    
       }
-      else if (currentBitIndex >= 0)
+      else if ((tcoLineState == HIGH) && (tcoLineStateOld == LOW))
       {
-        currentBitIndex++;
+        // start of pulse
+        lastPulseStart = currentTime;
+        if (lastPulseStart - lastPulseEnd > 1500)
+        {
+          // start of new one-minute-cycle detected
+          
+          if (currentBitIndex < 0)
+          {
+            // last cycle was invalid, fresh sync
+            #ifdef DCF77_DEBUG
+            Serial.println();
+            Serial.println("--sync--");
+            #endif
+          }
+          else
+          {
+            // cycle valid, sync internal clock
+            int h = hour();
+            int m = minute();
+            int d = day();
+            int mo = month();
+            int y = year() + 2000;
+  
+            setTime(h, m, 0, d, mo, y);
+  
+            #ifdef DCF77_DEBUG
+            Serial.println();
+            if (h < 10)
+            {
+              Serial.write('0');
+            }
+            Serial.print(h);
+            Serial.write(':');
+            if (m < 10)
+            {
+              Serial.write('0');
+            }
+            Serial.print(m);
+            Serial.write(' ');
+            Serial.print(d);
+            Serial.write('.');
+            Serial.print(mo);
+            Serial.write('.');
+            Serial.println(y);
+            #endif
+          }
+  
+          // start new cycle
+          currentBitIndex = 0;
+          bits[0] = bits[1] = 0UL;
+        }
+        else if (currentBitIndex >= 0)
+        {
+          currentBitIndex++;
+        }
       }
+      tcoLineStateOld = tcoLineState;
+  
     }
-    tcoLineStateOld = tcoLineState;
-
   }
   return high2low;
 }

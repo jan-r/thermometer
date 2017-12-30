@@ -64,6 +64,7 @@ private:
   unsigned long lastPulseEnd;
   char currentBitIndex;
   unsigned long bits[2];
+  bool isPowered;
 
   int hour();
   int minute();
