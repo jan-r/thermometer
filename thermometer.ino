@@ -108,7 +108,7 @@ typedef unsigned int  COORD;
 //#define WITH_TEST_COORDS
 
 // global display mode
-char displayMode = 2;
+char displayMode = 0;
 
 // temperature history
 #define HISTORY_VALUES            32      // must be power-of-two!
@@ -288,12 +288,12 @@ void setDisplayMode(int argc, char **args)
   if (argc != 2)
   {
     Stream *s = cmdGetStream();
-    s->println("*** dm: needs one argument (0: values, 1: bargraph, 2 auto)");
+    s->println("*** dm: needs one argument (0: auto, 1: values, 2: bargraph, 3: time)");
   }
   else
   {
     char val = cmdStr2Num(args[1], 10);
-    if ((val >= 0) && (val <= 2))
+    if ((val >= 0) && (val <= 3))
     {
       displayMode = val;
     }
@@ -311,16 +311,20 @@ void updateDisplay(unsigned long currentTime)
 
   if ((currentTime - lastUpdate) >= 1000)
   {
-    // one second has passed, update the display
+    // half a second has passed, update the display
 
     // determine the effective display mode depending on the globally selected display mode
-    if (displayMode == 2)
+    if (displayMode == 0)
     {
       // alternating display
       if (alternatingCounter <= 0)
       {
         // toggle display mode
-        currentDisplayMode ^= 1;
+        currentDisplayMode += 1;
+        if (currentDisplayMode > 3)
+        {
+          currentDisplayMode = 1;
+        }
         alternatingCounter = DISPLAY_ALTERNATING_SECONDS;
       }
       else
@@ -330,22 +334,29 @@ void updateDisplay(unsigned long currentTime)
     }
     else
     {
-      // in mode 0 and 1, just use the globally selected display mode
+      // in modes other than 0, just use the globally selected display mode
       currentDisplayMode = displayMode;
       alternatingCounter = 0;
     }
 
     // finally draw the display contents
-    if (currentDisplayMode == 0)
+    switch (currentDisplayMode)
     {
-      displayValues();
-    }
-    else
-    {
-      displayBargraph();
+      default:
+      case 1:
+        displayValues();
+        break;
+
+      case 2:
+        displayBargraph();
+        break;
+
+      case 3:
+        displayTime();
+        break;
     }
 
-    // update the one second timer
+    // update the update timer
     lastUpdate = currentTime;
   }
 }
@@ -387,6 +398,30 @@ void displayBargraph()
   {
     drawAxes();
     drawGraph();
+  } while ( u8g2.nextPage() );
+}
+
+// ----------------------------------------------------------------------------
+// Show current measured values on the display
+// ----------------------------------------------------------------------------
+void displayTime()
+{
+  u8g2.firstPage();
+  do {
+    time_t t = now();
+    char buf[12];
+    String s;
+    formatTime(t, &s, ' ', false);
+    s.toCharArray(buf, sizeof(buf));
+
+    u8g2.setFont(u8g2_font_fub20_tf);
+    u8g2.drawStr(0, 24, buf);
+
+    s = "";
+    formatDate(t, &s, true);
+    s.toCharArray(buf, sizeof(buf));
+
+    u8g2.drawStr(0,54,buf);
   } while ( u8g2.nextPage() );
 }
 
@@ -619,7 +654,7 @@ void drawGraph()
 // Passing 0 as prefix suppresses the prefix. To actually print a 0, pass '0'
 // as prefix.
 // ----------------------------------------------------------------------------
-void formatTime(time_t t, String *ps, char prefix = 0)
+void formatTime(time_t t, String *ps, char prefix, bool seconds)
 {
   // hours with optional leading zero
   char value = hour(t);
@@ -639,22 +674,27 @@ void formatTime(time_t t, String *ps, char prefix = 0)
     *ps += '0';
   }
   *ps += (int)value;
-  *ps += ':';
   
   // seconds
-  value = minute(t);
-  if (value < 10)
+  if (seconds)
   {
-    // leading zero
-    *ps += '0';
+    *ps += ':';
+    value = second(t);
+    if (value < 10)
+    {
+      // leading zero
+      *ps += '0';
+    }
+    *ps += (int)value;
   }
-  *ps += (int)value;
 }
 
 // ----------------------------------------------------------------------------
-// Format the given date into a nice string (dd.mm.yyyy)
+// Format the given date into a nice string
+// shortYear == false: dd.mm.yyyy
+// shortYear == true:  dd.mm.yy
 // ----------------------------------------------------------------------------
-void formatDate(time_t t, String *ps)
+void formatDate(time_t t, String *ps, bool shortYear)
 {
   // day with optional leading zero
   char value = day(t);
@@ -677,7 +717,10 @@ void formatDate(time_t t, String *ps)
   *ps += '.';
   
   // year
-  *ps += year(t);
+  if (shortYear)
+  {
+    *ps += year(t) % 100;
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -689,8 +732,8 @@ void printTime(int argc, char **args)
   String timestring;
   String datestring;
   time_t tm = now();
-  formatTime(tm, &timestring);
-  formatDate(tm, &datestring);
+  formatTime(tm, &timestring, 0, true);
+  formatDate(tm, &datestring, false);
   
   s->print(timestring);
   s->write(' ');
