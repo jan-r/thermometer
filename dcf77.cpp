@@ -184,21 +184,23 @@ bool DCF77_Module::process(unsigned long currentTime)
             int d = day();
             int mo = month();
             int y = year() + 2000;
-  
-            setTime(h, m, 0, d, mo, y);
-  
-            #ifdef DCF77_DEBUG
-            Serial.println();
-            if (h < 10)
+    
+            if (checkRcvdStream())
             {
-              Serial.write('0');
+              setTime(h, m, 0, d, mo, y);
             }
+            else
+            {
+              Serial.println();
+              Serial.println("pe");
+              Serial.println(bits[0], HEX);
+              Serial.println(bits[1], HEX);
+            }
+  
+            #if 1 //DCF77_DEBUG
+            Serial.println();
             Serial.print(h);
             Serial.write(':');
-            if (m < 10)
-            {
-              Serial.write('0');
-            }
             Serial.print(m);
             Serial.write(' ');
             Serial.print(d);
@@ -250,5 +252,45 @@ int DCF77_Module::month()
 int DCF77_Module::year()
 {
   return ((bits[1] >> 18) & 0xFU) + 10 * ((bits[1] >> 22) & 0xFU);
+}
+
+bool DCF77_Module::checkParity(unsigned long bitsToCheck)
+{
+  char parity = 0;
+  for (char i = 0; i < 32; i++)
+  {
+    parity ^= bitsToCheck & 1;
+    bitsToCheck >>= 1;
+  }
+  return (parity == 0);
+}
+
+bool DCF77_Module::checkRcvdStream()
+{
+  unsigned long bitsToCheck;
+  bool isOk = true;
+
+  // minutes (bit 28:21)
+  bitsToCheck = bits[0] & 0x1FE00000UL;
+  if (!checkParity(bitsToCheck))
+  {
+    isOk = false;
+  }
+
+  // hours (bit 35:29)
+  bitsToCheck = (bits[0] & 0xE0000000UL) | (bits[1] & 0x0000000FUL);
+  if (!checkParity(bitsToCheck))
+  {
+    isOk = false;
+  }
+
+  // date (bit 58:36)
+  bitsToCheck = bits[1] & 0x7FFFFF0UL;
+  if (!checkParity(bitsToCheck))
+  {
+    isOk = false;
+  }
+  
+  return isOk;
 }
 

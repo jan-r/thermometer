@@ -151,11 +151,13 @@ void setup(void)
   // initialize serial command interface
   Serial.begin(SERIAL_BAUDRATE);
   cmdInit(&Serial);
+  #if 0
   cmdAdd("rs", readSensor);
   #ifdef WITH_TEST_COORDS
   cmdAdd("tc", testCoords);
   #endif
   cmdAdd("dm", setDisplayMode);
+  #endif
   cmdAdd("now", printTime);
 }
 
