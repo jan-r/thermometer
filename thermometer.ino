@@ -717,10 +717,12 @@ void formatDate(time_t t, String *ps, bool shortYear)
   *ps += '.';
   
   // year
+  int yr = year(t);
   if (shortYear)
   {
-    *ps += year(t) % 100;
+     yr %= 100;
   }
+  *ps += yr;
 }
 
 // ----------------------------------------------------------------------------
@@ -738,5 +740,10 @@ void printTime(int argc, char **args)
   s->print(timestring);
   s->write(' ');
   s->println(datestring);
+
+  // suppress compiler warnings due to unused parameters (will be optimized
+  // away by the compiler anyway)
+  (void)argc;
+  (void)args;
 }
 
