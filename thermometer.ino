@@ -61,7 +61,7 @@
 #define DISP_DATA         A4        // HW I2C data line to display
 #define DISP_CLOCK        A5        // HW I2C clock line to display
 
-#define SERIAL_BAUDRATE   57600
+#define SERIAL_BAUDRATE   115200
 
 
 // ----------------------------------------------------------------------------
@@ -103,7 +103,7 @@ typedef unsigned char COORD;
 typedef unsigned int  COORD;
 #endif
 
-#define DISPLAY_ALTERNATING_SECONDS   5
+#define DISPLAY_ALTERNATING_SECONDS   3
 #define DOTTED_LINE_DELTA             10
 //#define WITH_TEST_COORDS
 
@@ -131,7 +131,7 @@ void setup(void)
   u8g2.firstPage();
   do
   {
-    u8g2.drawStr(0,24,"Hi!");
+    u8g2.drawStr(0,24,"dbg");
   } while ( u8g2.nextPage() );
 
   // power up and initialize DHT22 sensor
@@ -150,15 +150,16 @@ void setup(void)
 
   // initialize serial command interface
   Serial.begin(SERIAL_BAUDRATE);
-  cmdInit(&Serial);
   #if 0
+  cmdInit(&Serial);
   cmdAdd("rs", readSensor);
   #ifdef WITH_TEST_COORDS
   cmdAdd("tc", testCoords);
   #endif
   cmdAdd("dm", setDisplayMode);
-  #endif
   cmdAdd("now", printTime);
+  #endif
+  Serial.println("Debugging session started");
 }
 
 
@@ -182,7 +183,7 @@ void loop(void)
     updateDisplay(currentTime);
 
     // handle serial interface
-    cmdPoll();
+    //cmdPoll();
   }
 }
 

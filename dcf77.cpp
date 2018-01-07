@@ -48,6 +48,7 @@ DCF77_Module::DCF77_Module(int powerPin, int signalPin)
   pinMode(pinPower, OUTPUT);
   pinMode(pinSignal, INPUT);
   disable();
+  pinMode(13, OUTPUT);    // debugging LED
 }
 
 void DCF77_Module::enable()
@@ -62,6 +63,7 @@ void DCF77_Module::disable()
 {
   digitalWrite(pinPower, HIGH);
   isPowered = false;
+  digitalWrite(13, LOW);
 }
 
 // ----------------------------------------------------------------------------
@@ -112,6 +114,7 @@ bool DCF77_Module::process(unsigned long currentTime)
           tcoLineState = LOW;
         }
       }
+      digitalWrite(13, tcoLineState);
       
       if ((tcoLineState == LOW) && (tcoLineStateOld == HIGH))
       {
@@ -131,9 +134,11 @@ bool DCF77_Module::process(unsigned long currentTime)
           bitvalue = 1;
         }
         
-        #ifdef DCF77_DEBUG
+        #if 1 //def DCF77_DEBUG
         // print bitstream for debugging
-        Serial.print(bitvalue);
+        if (bitvalue < 0)
+          Serial.write('*');
+        Serial.println(pulse);
         #endif
         
         if (bitvalue < 0)
@@ -171,7 +176,7 @@ bool DCF77_Module::process(unsigned long currentTime)
           if (currentBitIndex < 0)
           {
             // last cycle was invalid, fresh sync
-            #ifdef DCF77_DEBUG
+            #if 1  //def DCF77_DEBUG
             Serial.println();
             Serial.println("--sync--");
             #endif
@@ -185,6 +190,8 @@ bool DCF77_Module::process(unsigned long currentTime)
             int mo = month();
             int y = year() + 2000;
     
+            Serial.println(bits[0], HEX);
+            Serial.println(bits[1], HEX);
             if (checkRcvdStream())
             {
               setTime(h, m, 0, d, mo, y);
@@ -193,8 +200,6 @@ bool DCF77_Module::process(unsigned long currentTime)
             {
               Serial.println();
               Serial.println("pe");
-              Serial.println(bits[0], HEX);
-              Serial.println(bits[1], HEX);
             }
   
             #if 1 //DCF77_DEBUG
