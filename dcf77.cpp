@@ -167,16 +167,7 @@ bool DCF77_Module::process(unsigned long currentTime)
         if (lastPulseStart - lastPulseEnd > 1500)
         {
           // start of new one-minute-cycle detected
-          
-          if (currentBitIndex < 0)
-          {
-            // last cycle was invalid, fresh sync
-            #ifdef DCF77_DEBUG
-            Serial.println();
-            Serial.println("--sync--");
-            #endif
-          }
-          else
+          if ((currentBitIndex == 58) || (currentBitIndex == 59))
           {
             // cycle valid, sync internal clock
             int h = hour();
@@ -189,6 +180,7 @@ bool DCF77_Module::process(unsigned long currentTime)
             {
               setTime(h, m, 0, d, mo, y);
             }
+            #ifdef DCF77_DEBUG
             else
             {
               Serial.println();
@@ -196,8 +188,9 @@ bool DCF77_Module::process(unsigned long currentTime)
               Serial.println(bits[0], HEX);
               Serial.println(bits[1], HEX);
             }
+            #endif
   
-            #if 1 //DCF77_DEBUG
+            #ifdef DCF77_DEBUG
             Serial.println();
             Serial.print(h);
             Serial.write(':');
@@ -208,6 +201,14 @@ bool DCF77_Module::process(unsigned long currentTime)
             Serial.print(mo);
             Serial.write('.');
             Serial.println(y);
+            #endif
+          }
+          else
+          {
+            // last cycle was invalid, fresh sync
+            #ifdef DCF77_DEBUG
+            Serial.println();
+            Serial.println("--sync--");
             #endif
           }
   
@@ -270,6 +271,9 @@ bool DCF77_Module::checkRcvdStream()
   unsigned long bitsToCheck;
   bool isOk = true;
 
+  // -----------------------------------------------------------------
+  // Parity checks
+  // -----------------------------------------------------------------
   // minutes (bit 28:21)
   bitsToCheck = bits[0] & 0x1FE00000UL;
   if (!checkParity(bitsToCheck))
@@ -287,6 +291,33 @@ bool DCF77_Module::checkRcvdStream()
   // date (bit 58:36)
   bitsToCheck = bits[1] & 0x7FFFFF0UL;
   if (!checkParity(bitsToCheck))
+  {
+    isOk = false;
+  }
+
+  // -----------------------------------------------------------------
+  // Sanity checks
+  // -----------------------------------------------------------------
+  int val = minute();
+  if ((val < 0) || (val > 59))
+  {
+    isOk = false;
+  }
+
+  val = hour();
+  if ((val < 0) || (val > 23))
+  {
+    isOk = false;
+  }
+
+  val = day();
+  if ((val < 1) || (val > 31))
+  {
+    isOk = false;
+  }
+
+  val = month();
+  if ((val < 1) || (val > 12))
   {
     isOk = false;
   }
