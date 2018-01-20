@@ -72,6 +72,8 @@ private:
   int month();
   int year();
 
+  bool checkParity(unsigned long bitsToCheck);
+  bool checkRcvdStream();
 };
 
 
